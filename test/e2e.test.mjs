@@ -3,6 +3,7 @@
 // Puppeteer), starts reloading a local page at the shortest interval, and
 // counts the page's loads on the server. Takes about a minute.
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { createServer } from "node:http";
 import { after, before, test } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -11,6 +12,13 @@ import puppeteer from "puppeteer";
 const extension = fileURLToPath(new URL("../extension", import.meta.url));
 let browser, server, worker, page, base;
 let loads = 0;
+
+// Chrome names an unpacked extension after its folder's path: the first 32
+// hex digits of the path's SHA-256, written with the letters a to p.
+function extensionId(path) {
+  const hex = createHash("sha256").update(path).digest("hex").slice(0, 32);
+  return [...hex].map((c) => String.fromCharCode(97 + parseInt(c, 16))).join("");
+}
 
 before(async () => {
   server = createServer((req, res) => {
@@ -31,9 +39,16 @@ before(async () => {
       ...(process.env.E2E_NO_SANDBOX ? ["--no-sandbox"] : []),
     ],
   });
+  // Puppeteer can miss a worker that started before it attached. Opening
+  // one of the extension's pages starts the worker if it is asleep, and
+  // shows it to Puppeteer either way.
+  const id = extensionId(extension);
+  const wake = await browser.newPage();
+  await wake.goto(`chrome-extension://${id}/popup.html`);
   const target = await browser.waitForTarget(
-    (t) => t.type() === "service_worker" && t.url().endsWith("/background.js"));
+    (t) => t.type() === "service_worker" && t.url() === `chrome-extension://${id}/background.js`);
   worker = await target.worker();
+  await wake.close();
   page = await browser.newPage();
   await page.goto(`${base}/page`);
   await page.bringToFront();
