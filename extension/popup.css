@@ -1,0 +1,55 @@
+:root {
+  --bg: #ffffff;
+  --fg: #202124;
+  --muted: #5f6368;
+  --accent: #1a73e8;
+  --error: #c5221f;
+  --border: #dadce0;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #202124;
+    --fg: #e8eaed;
+    --muted: #9aa0a6;
+    --accent: #8ab4f8;
+    --error: #f28b82;
+    --border: #5f6368;
+  }
+}
+body {
+  width: 260px;
+  margin: 0;
+  padding: 12px 14px;
+  font: 13px/1.4 system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+}
+h1 { font-size: 15px; margin: 0 0 10px; }
+label { display: block; margin-bottom: 6px; }
+.row { display: flex; gap: 6px; margin-bottom: 8px; }
+input[type="text"], select {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+}
+.check { display: flex; align-items: center; gap: 6px; color: var(--muted); }
+button {
+  flex: 1;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+  cursor: pointer;
+}
+button#start { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+button:disabled { opacity: 0.5; cursor: default; }
+#status { margin: 4px 0 0; color: var(--muted); min-height: 1.4em; }
+#error { margin: 4px 0 0; color: var(--error); }
+#error:empty { display: none; }

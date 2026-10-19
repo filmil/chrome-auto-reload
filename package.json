@@ -1,0 +1,15 @@
+{
+  "name": "chrome-auto-reload",
+  "private": true,
+  "description": "A Chrome extension that reloads a tab on a timer, with no access to page content.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/lib.test.mjs test/manifest.test.mjs",
+    "test:e2e": "node --test test/e2e.test.mjs",
+    "icons": "python3 scripts/make_icons.py extension/icons"
+  },
+  "devDependencies": {
+    "puppeteer": "23.11.1"
+  }
+}

@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Auto Reload</title>
+  <link rel="stylesheet" href="popup.css">
+  <script type="module" src="popup.js"></script>
+</head>
+<body>
+  <h1>Auto Reload</h1>
+  <form id="form">
+    <label for="value">Reload this tab every</label>
+    <div class="row">
+      <input id="value" type="text" inputmode="decimal" value="5" autocomplete="off">
+      <select id="unit" aria-label="Unit">
+        <option value="s">seconds</option>
+        <option value="min" selected>minutes</option>
+        <option value="h">hours</option>
+      </select>
+    </div>
+    <label class="check"><input id="bypass" type="checkbox"> Bypass the cache</label>
+    <div class="row">
+      <button id="start" type="submit">Start</button>
+      <button id="stop" type="button">Stop</button>
+    </div>
+  </form>
+  <p id="status" role="status"></p>
+  <p id="error" role="alert"></p>
+</body>
+</html>
