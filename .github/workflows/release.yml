@@ -1,13 +1,13 @@
 # Builds the extension with Bazel and publishes it as a GitHub release.
 #
-# Every Monday, if extension/ changed since the last release; or by hand,
+# Every day, if extension/ changed since the last release; or by hand,
 # from the Actions tab, with "force" to release even without changes.
 # The version is the UTC date, YYYY.M.D, with a fourth part if there is
 # already a release that day: Chrome needs up to four integers.
 name: release
 on:
   schedule:
-    - cron: "17 14 * * 1" # Mondays, 07:17 PDT / 06:17 PST
+    - cron: "17 14 * * *" # every day, 07:17 PDT / 06:17 PST
   workflow_dispatch:
     inputs:
       force:

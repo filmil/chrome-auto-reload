@@ -59,7 +59,7 @@ Chrome 120 or later.
 
 ## Releases
 
-[`release.yml`](.github/workflows/release.yml) runs every Monday. If
+[`release.yml`](.github/workflows/release.yml) runs every day. If
 `extension/` changed since the last release, it runs the tests, builds
 the zip with Bazel, tests that zip in Chrome, and publishes a release
 named after the date (for example `v2026.10.19`). It can also be run by hand from the Actions tab, with
