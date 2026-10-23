@@ -113,6 +113,14 @@ login at once, run the workflow by hand from the Actions tab: with the
 first version still in review, it logs in, reads the store's status, and
 says that it sends nothing.
 
+## Privacy
+
+The extension collects no data, and sends nothing anywhere. It makes no
+network requests. It cannot read the pages it reloads: it knows a tab
+only by its number. It stores two things, in your browser only: each
+tab's reload interval, for the browser session, and the last interval
+you chose, as the default for the next tab.
+
 ## Development
 
 [Bazel](https://bazel.build) builds the release zip and runs the unit
