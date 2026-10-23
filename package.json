@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "test:e2e": "node --test test/e2e.test.mjs",
-    "icons": "python3 scripts/make_icons.py extension/icons"
+    "icons": "python3 scripts/make_icons.py extension/icons",
+    "store-assets": "node scripts/make_store_assets.mjs"
   },
   "devDependencies": {
     "puppeteer": "23.11.1"

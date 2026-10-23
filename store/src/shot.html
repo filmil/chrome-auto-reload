@@ -1,0 +1,46 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: Apache-2.0. The 1280x800 store screenshot; scripts/make_store_assets.mjs renders it. -->
+<html><head><meta charset="utf-8"><style>
+  * { box-sizing: border-box; }
+  body { margin: 0; width: 1280px; height: 800px; overflow: hidden;
+    font-family: "Noto Sans", sans-serif; color: #202124;
+    background: linear-gradient(135deg, #e8f0fe 0%, #f8f9fa 60%); }
+  .text { position: absolute; left: 80px; top: 170px; width: 520px; }
+  h1 { font-size: 52px; line-height: 1.1; margin: 0 0 24px; }
+  .lead { font-size: 26px; line-height: 1.4; margin: 0 0 32px; color: #3c4043; }
+  ul { list-style: none; padding: 0; margin: 0; font-size: 22px; line-height: 1.9; }
+  li::before { content: "✓"; color: #1a73e8; font-weight: 700; margin-right: 14px; }
+  .src { margin-top: 30px; font-size: 18px; color: #5f6368; }
+  .win { position: absolute; left: 660px; top: 120px; width: 560px; height: 560px;
+    background: #fff; border-radius: 14px; box-shadow: 0 12px 40px rgba(60,64,67,.25); overflow: hidden; }
+  .bar { height: 56px; background: #f1f3f4; display: flex; align-items: center; padding: 0 16px; gap: 12px; }
+  .url { flex: 1; height: 34px; border-radius: 17px; background: #fff; color: #5f6368;
+    font-size: 15px; display: flex; align-items: center; padding: 0 16px; }
+  .icon { position: relative; width: 32px; height: 32px; }
+  .icon img { width: 32px; height: 32px; }
+  .badge { position: absolute; right: -8px; bottom: -6px; background: #1a73e8; color: #fff;
+    font-size: 13px; font-weight: 700; border-radius: 4px; padding: 0 5px; line-height: 17px; }
+  .pop { position: absolute; right: 18px; top: 66px; width: 288px; height: 250px;
+    transform: scale(1.55); transform-origin: top right; border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(60,64,67,.3); background: #fff; overflow: hidden; }
+  .pop iframe { border: 0; width: 288px; height: 250px; }
+</style></head><body>
+  <div class="text">
+    <h1>filmil's Auto Reload</h1>
+    <p class="lead">Reloads a tab every few seconds, minutes or hours. The icon counts down the minutes.</p>
+    <ul>
+      <li>No ads, no tracking</li>
+      <li>No access to page content</li>
+      <li>No network access</li>
+      <li>Only two permissions: alarms and storage</li>
+    </ul>
+    <p class="src">Open source: github.com/filmil/chrome-auto-reload</p>
+  </div>
+  <div class="win">
+    <div class="bar">
+      <div class="url">status.example.com/dashboard</div>
+      <div class="icon"><img src="icons/icon32.png"><span class="badge">5</span></div>
+    </div>
+    <div class="pop"><iframe src="popup-shot.html"></iframe></div>
+  </div>
+</body></html>

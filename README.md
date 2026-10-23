@@ -78,6 +78,8 @@ version again; the next release goes instead. It logs in to Google
 without a stored key: GitHub Actions proves which repository it runs for,
 and Google lets only this repository act as the store's service account.
 
+The store listing, its text and images, is in [`store/`](store/listing.md).
+
 Until the setup below is done, the workflow skips. The setup is one time:
 
 1. **Register** as a Chrome Web Store developer, with 2-step verification
