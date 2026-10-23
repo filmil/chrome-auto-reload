@@ -1,4 +1,4 @@
-# Packages the extension and publishes it as a GitHub release.
+# Builds the extension with Bazel and publishes it as a GitHub release.
 #
 # Every Monday, if extension/ changed since the last release; or by hand,
 # from the Actions tab, with "force" to release even without changes.
@@ -43,18 +43,6 @@ jobs:
             echo "no changes to extension/ since $last; nothing to release"
             echo "release=false" >> "$GITHUB_OUTPUT"
           fi
-      - uses: actions/setup-node@v4
-        if: steps.changes.outputs.release == 'true'
-        with:
-          node-version: 22
-          cache: npm
-      - name: Test
-        if: steps.changes.outputs.release == 'true'
-        run: |
-          npm ci
-          npm test
-          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-          npm run test:e2e
       - name: Version
         if: steps.changes.outputs.release == 'true'
         id: version
@@ -66,9 +54,33 @@ jobs:
           done
           echo "version=$candidate" >> "$GITHUB_OUTPUT"
           echo "releasing $candidate"
-      - name: Package
+      # The runner's bazel is Bazelisk, which runs the version in
+      # .bazelversion.
+      - name: Test and package
         if: steps.changes.outputs.release == 'true'
-        run: scripts/package.sh "${{ steps.version.outputs.version }}" dist
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          bazel test //...
+          bazel build //:zip --//:version="$VERSION"
+          mkdir -p dist
+          cp "bazel-bin/auto-reload-$VERSION.zip" dist/
+          (cd dist && sha256sum "auto-reload-$VERSION.zip" > "auto-reload-$VERSION.zip.sha256")
+      - uses: actions/setup-node@v4
+        if: steps.changes.outputs.release == 'true'
+        with:
+          node-version: 22
+          cache: npm
+      # The end-to-end test loads the zip it is about to publish.
+      - name: End-to-end test of the zip in Chrome
+        if: steps.changes.outputs.release == 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          npm ci
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          unzip -q "dist/auto-reload-$VERSION.zip" -d "$RUNNER_TEMP/unzipped"
+          E2E_EXTENSION_DIR="$RUNNER_TEMP/unzipped" npm run test:e2e
       - name: Publish
         if: steps.changes.outputs.release == 'true'
         env:

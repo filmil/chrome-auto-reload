@@ -5,11 +5,16 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { createServer } from "node:http";
+import { resolve } from "node:path";
 import { after, before, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import puppeteer from "puppeteer";
 
-const extension = fileURLToPath(new URL("../extension", import.meta.url));
+// The source folder, or E2E_EXTENSION_DIR: the release sets it to its
+// unzipped zip, so the test runs what it publishes.
+const extension = process.env.E2E_EXTENSION_DIR
+  ? resolve(process.env.E2E_EXTENSION_DIR)
+  : fileURLToPath(new URL("../extension", import.meta.url));
 let browser, server, worker, page, base;
 let loads = 0;
 

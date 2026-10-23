@@ -60,25 +60,41 @@ Chrome 120 or later.
 ## Releases
 
 [`release.yml`](.github/workflows/release.yml) runs every Monday. If
-`extension/` changed since the last release, it runs the tests, packages
-the extension and publishes a release named after the date (for example
-`v2026.10.19`). It can also be run by hand from the Actions tab, with
+`extension/` changed since the last release, it runs the tests, builds
+the zip with Bazel, tests that zip in Chrome, and publishes a release
+named after the date (for example `v2026.10.19`). It can also be run by hand from the Actions tab, with
 **force** to release without changes.
 
 ## Development
 
+[Bazel](https://bazel.build) builds the release zip and runs the unit
+tests. Use [Bazelisk](https://github.com/bazelbuild/bazelisk), which runs
+the version in `.bazelversion`. Bazel downloads Node by itself, so the
+machine needs no Node for these.
+
+```sh
+bazel test //...                          # unit tests, and the permission and network checks
+bazel build //:zip --//:version=1.2.3     # bazel-bin/auto-reload-1.2.3.zip
+```
+
+The same source and version build the same zip, byte for byte. The
+version is 1 to 4 integers, each 0 to 65535, as Chrome requires.
+
+The end-to-end test needs Node and npm, since Puppeteer downloads its own
+Chrome:
+
 ```sh
 npm ci
-npm test            # unit tests, and the permission and network checks
-npm run test:e2e    # loads the extension into Chrome for Testing; ~40 s
-scripts/package.sh 1.2.3 dist
+npm run test:e2e    # loads the extension into Chrome for Testing; ~2 min
 ```
 
 The end-to-end test starts a local web page, has the extension reload it
 on a real 30-second alarm, and counts the page loads. On Ubuntu 23.10 and
 later, Chrome's sandbox cannot start without user namespaces; run it with
 `E2E_NO_SANDBOX=1`, or allow them with
-`sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0`.
+`sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0`. It loads
+`extension/` unless `E2E_EXTENSION_DIR` names another folder; the release
+points it at the unzipped zip.
 
 The icons are drawn by [`scripts/make_icons.py`](scripts/make_icons.py)
 (`npm run icons`), and CI checks that the committed PNGs match it.
