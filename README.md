@@ -91,10 +91,15 @@ Until the setup below is done, the workflow skips. The setup is one time:
    - `alarms`: runs the timer.
    - `storage`: keeps each tab's interval for the browser session.
    - Remote code: none. Data collected: none.
-3. **Create the Google login** for the workflow, in a Google Cloud
-   project you own: `scripts/webstore-setup.sh PROJECT_ID`. It creates a
-   service account and the federation that ties it to this repository,
-   and prints the next two steps.
+3. **Create the Google login** for the workflow:
+   `scripts/webstore-setup.sh PROJECT_ID filmil/chrome-auto-reload`.
+   One Google Cloud project serves all your extensions. It holds one
+   service account, which is the one the store knows; a publisher can
+   have only one. It lets GitHub Actions log in as that account from the
+   repositories you name, and no others; even your other repositories
+   cannot. For another extension later, run it again with that
+   repository: `scripts/webstore-setup.sh PROJECT_ID filmil/other-extension`.
+   It prints the next steps.
 4. **Add the service account** in the Dashboard, under **Account**.
 5. **Set the repository variables** it prints: the provider, the service
    account, the publisher ID (Dashboard, **Publisher**, **Settings**) and

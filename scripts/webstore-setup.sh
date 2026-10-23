@@ -1,20 +1,45 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: Apache-2.0
-# One-time Google Cloud setup for .github/workflows/webstore.yml: a service
-# account for the Chrome Web Store API, and a Workload Identity Federation
-# provider that lets this repository's GitHub Actions, and nothing else,
-# act as it. No key is created. Running it again changes nothing.
+# Google Cloud setup for publishing Chrome extensions from GitHub Actions,
+# for .github/workflows/webstore.yml. One project serves all of an
+# owner's extensions:
 #
-# usage: scripts/webstore-setup.sh PROJECT_ID [REPOSITORY]
-#   REPOSITORY defaults to filmil/chrome-auto-reload.
-# Needs gcloud, logged in as an owner of the project.
+# - one service account, the one the Chrome Web Store knows (a publisher
+#   can have only one);
+# - one Workload Identity Federation provider, which takes GitHub Actions
+#   logins from the owner's repositories only;
+# - for each repository named here, the right to act as the service
+#   account. Other repositories of the same owner cannot.
+#
+# No key is created. Running it again changes nothing; running it with a
+# new repository adds that repository.
+#
+# usage: scripts/webstore-setup.sh PROJECT_ID REPOSITORY [REPOSITORY...]
+#   e.g. scripts/webstore-setup.sh filmil-webstore filmil/chrome-auto-reload
+# All repositories must have the same owner. Needs gcloud, logged in as
+# an owner of the project, and curl.
 set -euo pipefail
-project="${1:?usage: webstore-setup.sh PROJECT_ID [REPOSITORY]}"
-repo="${2:-filmil/chrome-auto-reload}"
+usage="usage: webstore-setup.sh PROJECT_ID REPOSITORY [REPOSITORY...]"
+project="${1:?$usage}"
+shift
+(( $# > 0 )) || { echo "$usage" >&2; exit 2; }
+repos=("$@")
+owner="${repos[0]%%/*}"
+for r in "${repos[@]}"; do
+  [[ "$r" == "$owner"/?* && "$r" != */*/* ]] || {
+    echo "$r: want OWNER/NAME, all with the owner $owner" >&2; exit 2; }
+done
+
+# The owner's numeric GitHub ID does not change if the name is given up and
+# taken by someone else, so the provider checks the ID, not the name.
+owner_id="$(curl -fsS "https://api.github.com/users/$owner" \
+  | sed -n 's/^  "id": \([0-9]*\),$/\1/p')"
+[[ -n "$owner_id" ]] || { echo "could not find the GitHub ID of $owner" >&2; exit 1; }
+
 sa_name="chrome-web-store"
 sa="$sa_name@$project.iam.gserviceaccount.com"
 pool="github"
-provider="chrome-auto-reload"
+provider="github-$owner"
 
 g() { gcloud --project "$project" --quiet "$@"; }
 
@@ -36,32 +61,40 @@ case "$(state iam workload-identity-pools describe "$pool" --location=global)" i
   DELETED) g iam workload-identity-pools undelete "$pool" --location=global ;;
 esac
 
+condition="assertion.repository_owner_id == '$owner_id'"
 provider_args=(--location=global --workload-identity-pool="$pool")
 case "$(state iam workload-identity-pools providers describe "$provider" "${provider_args[@]}")" in
   MISSING) g iam workload-identity-pools providers create-oidc "$provider" "${provider_args[@]}" \
+             --display-name="GitHub, $owner" \
              --issuer-uri="https://token.actions.githubusercontent.com" \
              --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository" \
-             --attribute-condition="assertion.repository == '$repo'" ;;
+             --attribute-condition="$condition" ;;
   DELETED) g iam workload-identity-pools providers undelete "$provider" "${provider_args[@]}" ;;
 esac
-# Only this repository may log in, also when the provider was made for
-# another one before.
+# Set the condition every time, in case it was changed by hand.
 g iam workload-identity-pools providers update-oidc "$provider" "${provider_args[@]}" \
-  --attribute-condition="assertion.repository == '$repo'" >/dev/null
+  --attribute-condition="$condition" >/dev/null
 
-g iam service-accounts add-iam-policy-binding "$sa" \
-  --role=roles/iam.workloadIdentityUser \
-  --member="principalSet://iam.googleapis.com/projects/$number/locations/global/workloadIdentityPools/$pool/attribute.repository/$repo" \
-  >/dev/null
+for r in "${repos[@]}"; do
+  g iam service-accounts add-iam-policy-binding "$sa" \
+    --role=roles/iam.workloadIdentityUser \
+    --member="principalSet://iam.googleapis.com/projects/$number/locations/global/workloadIdentityPools/$pool/attribute.repository/$r" \
+    >/dev/null
+  echo "$r may publish as $sa"
+done
 
 cat <<DONE
 
 Done. Next:
-1. In the Chrome Web Store Developer Dashboard, under Account, add the
-   service account: $sa
-2. Set the repository variables (they are not secret):
-   gh variable set -R $repo GCP_WORKLOAD_IDENTITY_PROVIDER --body projects/$number/locations/global/workloadIdentityPools/$pool/providers/$provider
-   gh variable set -R $repo CWS_SERVICE_ACCOUNT --body $sa
-   gh variable set -R $repo CWS_PUBLISHER_ID --body <from Dashboard, Publisher, Settings>
-   gh variable set -R $repo CWS_EXTENSION_ID --body <the item's ID in the Dashboard>
+1. If you have not yet: in the Chrome Web Store Developer Dashboard,
+   under Account, add the service account: $sa
+2. Set each repository's variables (they are not secret):
 DONE
+for r in "${repos[@]}"; do
+  cat <<VARS
+   gh variable set -R $r GCP_WORKLOAD_IDENTITY_PROVIDER --body projects/$number/locations/global/workloadIdentityPools/$pool/providers/$provider
+   gh variable set -R $r CWS_SERVICE_ACCOUNT --body $sa
+   gh variable set -R $r CWS_PUBLISHER_ID --body <from Dashboard, Publisher, Settings>
+   gh variable set -R $r CWS_EXTENSION_ID --body <the extension's item ID>
+VARS
+done
