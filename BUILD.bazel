@@ -72,3 +72,9 @@ node_test(
 )
 
 version_test_suite(name = "version_test")
+
+node_test(
+    name = "webstore_test",
+    srcs = ["test/webstore.test.mjs"],
+    data = ["scripts/webstore.mjs"],
+)

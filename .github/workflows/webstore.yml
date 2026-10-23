@@ -1,0 +1,62 @@
+# Sends the newest GitHub release to the Chrome Web Store, and submits it
+# for review, if the store does not have it yet.
+#
+# Runs after each release, every day as a retry, and by hand. It does
+# nothing while a version is in review, so a release made then goes to the
+# store on the first run after the review ends.
+#
+# It needs the one-time setup in README.md, "Chrome Web Store". Until the
+# repository variables are set, it skips.
+name: webstore
+on:
+  workflow_run:
+    workflows: [release]
+    types: [completed]
+  schedule:
+    - cron: "47 15 * * *" # every day, 08:47 PDT / 07:47 PST
+  workflow_dispatch:
+permissions:
+  contents: read
+  id-token: write # for the keyless Google login
+concurrency:
+  group: webstore
+jobs:
+  publish:
+    if: >-
+      vars.CWS_EXTENSION_ID != '' &&
+      (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download the newest release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="$(gh release view --json tagName -q .tagName)"
+          version="${tag#v}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          mkdir -p dist
+          gh release download "$tag" --dir dist \
+            --pattern "auto-reload-$version.zip" --pattern "auto-reload-$version.zip.sha256"
+          (cd dist && sha256sum -c "auto-reload-$version.zip.sha256")
+      # Exchanges this run's GitHub identity for a short-lived Google token
+      # of the service account the store knows. No key is stored anywhere.
+      - id: google
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.CWS_SERVICE_ACCOUNT }}
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/chromewebstore
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Send to the Chrome Web Store
+        env:
+          CWS_PUBLISHER_ID: ${{ vars.CWS_PUBLISHER_ID }}
+          CWS_EXTENSION_ID: ${{ vars.CWS_EXTENSION_ID }}
+          CWS_ACCESS_TOKEN: ${{ steps.google.outputs.access_token }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: node scripts/webstore.mjs "$VERSION" "dist/auto-reload-$VERSION.zip"
