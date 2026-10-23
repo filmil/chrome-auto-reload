@@ -68,6 +68,40 @@ the zip with Bazel, tests that zip in Chrome, and publishes a release
 named after the date (for example `v2026.10.19`). It can also be run by hand from the Actions tab, with
 **force** to release without changes.
 
+## Chrome Web Store
+
+[`webstore.yml`](.github/workflows/webstore.yml) sends the newest release
+to the Chrome Web Store and submits it for review, if the store does not
+have that version yet. It runs after each release and once a day. While
+a version is in review it sends nothing, and it never sends a rejected
+version again; the next release goes instead. It logs in to Google
+without a stored key: GitHub Actions proves which repository it runs for,
+and Google lets only this repository act as the store's service account.
+
+Until the setup below is done, the workflow skips. The setup is one time:
+
+1. **Register** as a Chrome Web Store developer, with 2-step verification
+   on the Google account.
+2. **Upload the first version by hand.** In the
+   [Developer Dashboard](https://chrome.google.com/webstore/devconsole),
+   add a new item with the zip from the newest release. Fill in the
+   **Store listing** and **Privacy** tabs, and submit it. The privacy
+   tab asks for these:
+   - Single purpose: reload the current tab on a timer.
+   - `alarms`: runs the timer.
+   - `storage`: keeps each tab's interval for the browser session.
+   - Remote code: none. Data collected: none.
+3. **Create the Google login** for the workflow, in a Google Cloud
+   project you own: `scripts/webstore-setup.sh PROJECT_ID`. It creates a
+   service account and the federation that ties it to this repository,
+   and prints the next two steps.
+4. **Add the service account** in the Dashboard, under **Account**.
+5. **Set the repository variables** it prints: the provider, the service
+   account, the publisher ID (Dashboard, **Publisher**, **Settings**) and
+   the item ID.
+
+Then run the workflow by hand once from the Actions tab, to check it.
+
 ## Development
 
 [Bazel](https://bazel.build) builds the release zip and runs the unit
