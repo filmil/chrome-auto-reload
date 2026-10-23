@@ -12,22 +12,28 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+      # The runner's bazel is Bazelisk, which runs the version in
+      # .bazelversion. Bazel fetches Node for the tests by itself.
+      - name: Unit and manifest tests
+        run: bazel test //...
+      - name: Package
+        run: |
+          bazel build //:zip
+          rm -rf "$RUNNER_TEMP/unzipped"
+          unzip -q bazel-bin/auto-reload-0.1.0.zip -d "$RUNNER_TEMP/unzipped"
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Unit and manifest tests
-        run: npm test
       # Ubuntu 24.04 blocks the user namespaces Chrome's sandbox needs.
       # Lift that on this throwaway VM, so the test runs Chrome sandboxed.
       - name: Allow Chrome's sandbox
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-      - name: End-to-end test in Chrome
-        run: npm run test:e2e
+      # On the zip Bazel built, so the test sees what a release would ship.
+      - name: End-to-end test of the zip in Chrome
+        run: E2E_EXTENSION_DIR="$RUNNER_TEMP/unzipped" npm run test:e2e
       - name: Icons match their generator
         run: |
           python3 scripts/make_icons.py "$RUNNER_TEMP/icons"
           diff -r extension/icons "$RUNNER_TEMP/icons"
-      - name: Package
-        run: scripts/package.sh 0.0.0 "$RUNNER_TEMP/dist"
