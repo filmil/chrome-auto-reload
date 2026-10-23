@@ -161,3 +161,14 @@ test("the script fails when the store does not take the submission", async () =>
     assert.match(stderr, /publish ended as/);
   }
 });
+
+test("a failed upload reports the store's last status", async () => {
+  let polls = 0;
+  const { code, stderr } = await runAgainst((url) => {
+    if (url.endsWith(":upload")) return { uploadState: "IN_PROGRESS" };
+    polls += 1;
+    return polls === 1 ? {} : { lastAsyncUploadState: polls === 2 ? "IN_PROGRESS" : "FAILED", publicKey: "k" };
+  });
+  assert.equal(code, 1);
+  assert.match(stderr, /upload ended as FAILED: .*"publicKey":"k"/);
+});

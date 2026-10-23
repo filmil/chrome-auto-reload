@@ -9,7 +9,9 @@
 # - one Workload Identity Federation provider, which takes GitHub Actions
 #   logins from the owner's repositories only;
 # - for each repository named here, the right to act as the service
-#   account. Other repositories of the same owner cannot.
+#   account, from its .github/workflows/webstore.yml on its main branch
+#   only. Other workflows, other branches, and the owner's other
+#   repositories cannot.
 #
 # No key is created. Running it again changes nothing; running it with a
 # new repository adds that repository.
@@ -26,20 +28,25 @@ shift
 repos=("$@")
 owner="${repos[0]%%/*}"
 for r in "${repos[@]}"; do
-  [[ "$r" == "$owner"/?* && "$r" != */*/* ]] || {
+  [[ -n "$owner" && "$r" == "$owner"/?* && "$r" != */*/* ]] || {
     echo "$r: want OWNER/NAME, all with the owner $owner" >&2; exit 2; }
 done
 
 # The owner's numeric GitHub ID does not change if the name is given up and
 # taken by someone else, so the provider checks the ID, not the name.
-owner_id="$(curl -fsS "https://api.github.com/users/$owner" \
-  | sed -n 's/^  "id": \([0-9]*\),$/\1/p')"
-[[ -n "$owner_id" ]] || { echo "could not find the GitHub ID of $owner" >&2; exit 1; }
+owner_json="$(curl -fsS "https://api.github.com/users/$owner")" \
+  || { echo "could not look up $owner on GitHub" >&2; exit 1; }
+owner_id="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])' <<<"$owner_json")" \
+  || { echo "could not find the GitHub ID of $owner" >&2; exit 1; }
 
 sa_name="chrome-web-store"
 sa="$sa_name@$project.iam.gserviceaccount.com"
 pool="github"
-provider="github-$owner"
+# A provider ID is 4 to 32 lowercase letters, digits and hyphens; GitHub
+# names are case-insensitive and use only letters, digits and hyphens.
+lower_owner="$(tr 'A-Z' 'a-z' <<<"$owner")"
+provider="gh-${lower_owner:0:29}"
+provider="${provider%-}"
 
 g() { gcloud --project "$project" --quiet "$@"; }
 
@@ -62,25 +69,28 @@ case "$(state iam workload-identity-pools describe "$pool" --location=global)" i
 esac
 
 condition="assertion.repository_owner_id == '$owner_id'"
+issuer="https://token.actions.githubusercontent.com"
+# attribute.workflow names the workflow file and the branch it ran from.
+mapping="google.subject=assertion.sub,attribute.repository=assertion.repository,attribute.workflow=assertion.job_workflow_ref"
 provider_args=(--location=global --workload-identity-pool="$pool")
 case "$(state iam workload-identity-pools providers describe "$provider" "${provider_args[@]}")" in
   MISSING) g iam workload-identity-pools providers create-oidc "$provider" "${provider_args[@]}" \
              --display-name="GitHub, $owner" \
-             --issuer-uri="https://token.actions.githubusercontent.com" \
-             --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository" \
+             --issuer-uri="$issuer" --attribute-mapping="$mapping" \
              --attribute-condition="$condition" ;;
   DELETED) g iam workload-identity-pools providers undelete "$provider" "${provider_args[@]}" ;;
 esac
-# Set the condition every time, in case it was changed by hand.
+# Set the provider every time, in case it was changed by hand.
 g iam workload-identity-pools providers update-oidc "$provider" "${provider_args[@]}" \
+  --issuer-uri="$issuer" --attribute-mapping="$mapping" \
   --attribute-condition="$condition" >/dev/null
 
 for r in "${repos[@]}"; do
   g iam service-accounts add-iam-policy-binding "$sa" \
     --role=roles/iam.workloadIdentityUser \
-    --member="principalSet://iam.googleapis.com/projects/$number/locations/global/workloadIdentityPools/$pool/attribute.repository/$r" \
+    --member="principalSet://iam.googleapis.com/projects/$number/locations/global/workloadIdentityPools/$pool/attribute.workflow/$r/.github/workflows/webstore.yml@refs/heads/main" \
     >/dev/null
-  echo "$r may publish as $sa"
+  echo "$r may publish as $sa, from webstore.yml on main"
 done
 
 cat <<DONE

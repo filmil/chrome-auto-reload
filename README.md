@@ -96,8 +96,9 @@ Until the setup below is done, the workflow skips. The setup is one time:
    One Google Cloud project serves all your extensions. It holds one
    service account, which is the one the store knows; a publisher can
    have only one. It lets GitHub Actions log in as that account from the
-   repositories you name, and no others; even your other repositories
-   cannot. For another extension later, run it again with that
+   `webstore.yml` workflow on the main branch of the repositories you
+   name, and from nothing else; your other repositories, workflows and
+   branches cannot. For another extension later, run it again with that
    repository: `scripts/webstore-setup.sh PROJECT_ID filmil/other-extension`.
    It prints the next steps.
 4. **Add the service account** in the Dashboard, under **Account**.
