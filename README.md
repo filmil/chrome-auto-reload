@@ -35,8 +35,13 @@ not ask for.
 ## Use
 
 Click the extension's icon on the tab to reload, choose an interval, and
-press **Start**. The icon shows **ON** on tabs that are reloading, and the
-popup counts down to the next reload. **Stop** ends it; closing the tab
+press **Start**. On a tab that is reloading, the icon shows the minutes
+left until the next reload, rounded up: **5** means at most 5 minutes, and
+**1** means the last minute. Above 999 minutes it shows hours, such as
+**17h**. Chrome runs an alarm no sooner than 30 seconds after it is set,
+so for an interval that is not a whole number of minutes, the badge can
+show the next number up to 30 seconds late. The popup counts down to the
+next reload in seconds. **Stop** ends it; closing the tab
 does too. **Bypass the cache** reloads as Shift+Reload does.
 
 ## Install

@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
-// Keeps one Chrome alarm per tab that should reload, and reloads the tab
-// when its alarm fires. It needs no access to the page: chrome.tabs.reload
+// Keeps two Chrome alarms per tab that should reload: one reloads the tab
+// when it fires, and one updates the countdown on the tab's badge. It needs no access to the page: chrome.tabs.reload
 // and the tab's ID work without the "tabs" or any host permission.
-import { alarmName, tabIdFromAlarm } from "./lib.js";
+import {
+  alarmName, badgeAlarmName, badgeText, msUntilBadgeChange, tabIdFromAlarm,
+  tabIdFromBadgeAlarm,
+} from "./lib.js";
 
 // Settings per tab, in session storage: they end with the browser session,
 // as tab IDs do.
@@ -11,9 +14,23 @@ async function getConfig(tabId) {
   return (await chrome.storage.session.get(key))[key] ?? null;
 }
 
+// Shows the minutes until the next reload on the tab's badge, and sets an
+// alarm for when that number changes. The worker sleeps between events, so
+// an alarm, not a timer, wakes it. Chrome runs an alarm no sooner than 30
+// seconds after it is set, so a change due sooner shows up to 30 s late.
+// A reload that is overdue shows "1", and sets no badge alarm: the reload
+// alarm fires soon, and the reload shows the badge again.
 async function showBadge(tabId) {
+  const alarm = (await getConfig(tabId)) && (await chrome.alarms.get(alarmName(tabId)));
+  if (!alarm) return;
+  const left = alarm.scheduledTime - Date.now();
   await chrome.action.setBadgeBackgroundColor({ tabId, color: "#1a73e8" });
-  await chrome.action.setBadgeText({ tabId, text: "ON" });
+  await chrome.action.setBadgeText({ tabId, text: badgeText(left) });
+  const change = msUntilBadgeChange(left);
+  if (change === null) await chrome.alarms.clear(badgeAlarmName(tabId));
+  else await chrome.alarms.create(badgeAlarmName(tabId), { when: Date.now() + change });
+  // A stop that ran while this one waited would leave a badge behind.
+  if (!(await getConfig(tabId))) await stop(tabId);
 }
 
 async function start(tabId, seconds, bypassCache) {
@@ -29,6 +46,7 @@ async function start(tabId, seconds, bypassCache) {
 async function stop(tabId) {
   const name = alarmName(tabId);
   await chrome.alarms.clear(name);
+  await chrome.alarms.clear(badgeAlarmName(tabId));
   await chrome.storage.session.remove(name);
   // The tab may be gone already.
   await chrome.action.setBadgeText({ tabId, text: "" }).catch(() => {});
@@ -42,6 +60,11 @@ async function status(tabId) {
 }
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
+  const badgeTab = tabIdFromBadgeAlarm(alarm.name);
+  if (badgeTab !== null) {
+    await showBadge(badgeTab).catch(() => stop(badgeTab));
+    return;
+  }
   const tabId = tabIdFromAlarm(alarm.name);
   if (tabId === null) return;
   const config = await getConfig(tabId);
@@ -51,6 +74,7 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   }
   try {
     await chrome.tabs.reload(tabId, { bypassCache: config.bypassCache });
+    await showBadge(tabId);
   } catch {
     // The tab no longer exists.
     await stop(tabId);
@@ -69,7 +93,9 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 // Tab IDs do not survive a browser restart, so neither do the alarms.
 chrome.runtime.onStartup.addListener(async () => {
   for (const alarm of await chrome.alarms.getAll()) {
-    if (tabIdFromAlarm(alarm.name) !== null) await chrome.alarms.clear(alarm.name);
+    if (tabIdFromAlarm(alarm.name) !== null || tabIdFromBadgeAlarm(alarm.name) !== null) {
+      await chrome.alarms.clear(alarm.name);
+    }
   }
 });
 
