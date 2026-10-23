@@ -82,6 +82,46 @@ test("reloads the tab on its alarm, and stops when told", { timeout: 120_000 }, 
   assert.equal(await worker.evaluate(() => chrome.alarms.getAll().then((a) => a.length)), 0);
 });
 
+// The badge text, waiting up to a few seconds for it to become `want`:
+// Chrome clears it on a reload, and the worker puts it back when the page
+// has loaded.
+async function badgeBecomes(tabId, want) {
+  const deadline = Date.now() + 5_000;
+  let text;
+  do {
+    text = await worker.evaluate((id) => chrome.action.getBadgeText({ tabId: id }), tabId);
+    if (text === want) return text;
+    await new Promise((r) => setTimeout(r, 200));
+  } while (Date.now() < deadline);
+  return text;
+}
+
+test("the badge counts down the minutes, and clears on stop", { timeout: 120_000 }, async () => {
+  const tabId = await pageTabId();
+  await worker.evaluate((id) => globalThis.autoReload.start(id, 120, false), tabId);
+  try {
+    assert.equal(await badgeBecomes(tabId, "2"), "2");
+    // The change to "1" is due a minute from now, by the badge's alarm.
+    const alarm = await worker.evaluate((id) => chrome.alarms.get(`badge:${id}`), tabId);
+    const wait = alarm.scheduledTime - Date.now();
+    assert.ok(wait > 50_000 && wait <= 60_000, `badge changes in ${wait} ms`);
+    await new Promise((r) => setTimeout(r, wait));
+    // Chrome may run an alarm a little late; allow for it.
+    const deadline = Date.now() + 15_000;
+    let text;
+    do {
+      text = await worker.evaluate((id) => chrome.action.getBadgeText({ tabId: id }), tabId);
+      if (text === "1") break;
+      await new Promise((r) => setTimeout(r, 500));
+    } while (Date.now() < deadline);
+    assert.equal(text, "1");
+  } finally {
+    await worker.evaluate((id) => globalThis.autoReload.stop(id), tabId);
+  }
+  assert.equal(await badgeBecomes(tabId, ""), "");
+  assert.equal(await worker.evaluate(() => chrome.alarms.getAll().then((a) => a.length)), 0);
+});
+
 async function checkReloads(tabId, before) {
   const state = await worker.evaluate((id) => globalThis.autoReload.status(id), tabId);
   assert.equal(state.active, true);
@@ -93,6 +133,8 @@ async function checkReloads(tabId, before) {
   const deadline = Date.now() + 75_000;
   while (loads === before && Date.now() < deadline) await new Promise((r) => setTimeout(r, 500));
   assert.ok(loads > before, "the page was not reloaded");
+  // A 30 second interval is always in its last minute.
+  assert.equal(await badgeBecomes(tabId, "1"), "1");
 }
 
 test("the popup refuses an interval under 30 seconds", async () => {

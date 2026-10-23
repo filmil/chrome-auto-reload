@@ -36,13 +36,48 @@ export function formatDuration(totalSeconds) {
   return parts.join(" ");
 }
 
-// One alarm per tab, named after it.
+// Two alarms per tab, named after it: one reloads the tab, and one updates
+// the countdown on the tab's badge.
 const PREFIX = "reload:";
+const BADGE_PREFIX = "badge:";
+function parseAlarm(name, prefix) {
+  if (typeof name !== "string" || !name.startsWith(prefix)) return null;
+  const digits = name.slice(prefix.length);
+  return /^\d+$/.test(digits) ? Number(digits) : null;
+}
 export function alarmName(tabId) {
   return `${PREFIX}${tabId}`;
 }
 export function tabIdFromAlarm(name) {
-  if (typeof name !== "string" || !name.startsWith(PREFIX)) return null;
-  const digits = name.slice(PREFIX.length);
-  return /^\d+$/.test(digits) ? Number(digits) : null;
+  return parseAlarm(name, PREFIX);
+}
+export function badgeAlarmName(tabId) {
+  return `${BADGE_PREFIX}${tabId}`;
+}
+export function tabIdFromBadgeAlarm(name) {
+  return parseAlarm(name, BADGE_PREFIX);
+}
+
+// The badge shows the minutes left until the next reload, rounded up: "5"
+// from 5 minutes down to just over 4, and "1" in the last minute. A badge
+// fits about four characters, so above 999 minutes it shows hours, rounded
+// up the same way ("17h"); the longest interval, 7 days, is "168h".
+const MINUTE = 60 * 1000;
+const HOUR = 60 * MINUTE;
+const MAX_BADGE_MINUTES = 999;
+
+export function badgeText(msLeft) {
+  const minutes = Math.max(1, Math.ceil(msLeft / MINUTE));
+  if (minutes <= MAX_BADGE_MINUTES) return String(minutes);
+  return `${Math.ceil(msLeft / HOUR)}h`;
+}
+
+// How long until badgeText(msLeft) changes, in milliseconds, or null when
+// it stays "1" until the reload.
+export function msUntilBadgeChange(msLeft) {
+  if (msLeft <= MINUTE) return null;
+  const minutes = Math.ceil(msLeft / MINUTE);
+  if (minutes <= MAX_BADGE_MINUTES) return msLeft - (minutes - 1) * MINUTE;
+  const hours = Math.ceil(msLeft / HOUR);
+  return msLeft - Math.max((hours - 1) * HOUR, MAX_BADGE_MINUTES * MINUTE);
 }
