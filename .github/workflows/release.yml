@@ -102,4 +102,4 @@ jobs:
             fi
           } > notes.md
           gh release create "v$VERSION" dist/* \
-            --target "$GITHUB_SHA" --title "Auto Reload $VERSION" --notes-file notes.md
+            --target "$GITHUB_SHA" --title "filmil's Auto Reload $VERSION" --notes-file notes.md
