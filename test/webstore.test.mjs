@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { compareVersions, plan } from "../scripts/webstore.mjs";
+import { compareVersions, isVersion, plan } from "../scripts/webstore.mjs";
 
 const revision = (state, ...versions) => ({
   state,
@@ -41,13 +41,31 @@ test("a rejected version is not sent again, but the next one is", () => {
   assert.equal(plan(status, "2026.10.24").upload, true);
 });
 
+test("a staged version waits; a cancelled one can be sent again", () => {
+  const staged = { submittedItemRevisionStatus: revision("STAGED", "2026.10.23") };
+  assert.match(plan(staged, "2026.10.24").reason, /2026.10.23 is staged/);
+  const cancelled = {
+    publishedItemRevisionStatus: revision("PUBLISHED", "2026.10.19"),
+    submittedItemRevisionStatus: revision("CANCELLED", "2026.10.23"),
+  };
+  assert.equal(plan(cancelled, "2026.10.23").upload, true);
+});
+
+test("only Chrome versions are taken", () => {
+  for (const v of ["1", "0.1.0", "2026.10.23.1", "65535"]) assert.ok(isVersion(v), v);
+  for (const v of ["", "v1", "1.02", "65536", "1.2.3.4.5", "1.x", undefined]) {
+    assert.ok(!isVersion(v), String(v));
+  }
+  assert.throws(() => plan({}, "v2026.10.23"), /not a Chrome version/);
+});
+
 test("an item taken down stops the release", () => {
   assert.throws(() => plan({ takenDown: true }, "2026.10.23"), /taken the item down/);
 });
 
 // Runs the script against a local server that answers as the store does.
 import { execFile } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -66,7 +84,8 @@ async function runAgainst(answers) {
     });
   });
   await new Promise((r) => server.listen(0, "127.0.0.1", r));
-  const zip = join(mkdtempSync(join(tmpdir(), "cws")), "a.zip");
+  const dir = mkdtempSync(join(tmpdir(), "cws"));
+  const zip = join(dir, "a.zip");
   writeFileSync(zip, "zip bytes");
   const script = fileURLToPath(new URL("../scripts/webstore.mjs", import.meta.url));
   const result = await new Promise((resolve) => {
@@ -74,10 +93,12 @@ async function runAgainst(answers) {
       env: {
         CWS_API_URL: `http://127.0.0.1:${server.address().port}`,
         CWS_PUBLISHER_ID: "pub", CWS_EXTENSION_ID: "ext", CWS_ACCESS_TOKEN: "tok",
+        CWS_POLL_MS: "10",
       },
     }, (error, stdout, stderr) => resolve({ code: error?.code ?? 0, stdout, stderr }));
   });
   server.close();
+  rmSync(dir, { recursive: true, force: true });
   return { ...result, requests };
 }
 
@@ -114,4 +135,29 @@ test("the script fails on a failed upload or an HTTP error", async () => {
   const missing = await runAgainst(() => undefined);
   assert.equal(missing.code, 1);
   assert.match(missing.stderr, /HTTP 404/);
+});
+
+test("the script waits for an upload the store is still processing", async () => {
+  let polls = 0;
+  const { code, stdout, requests } = await runAgainst((url) => {
+    if (url.endsWith(":upload")) return { uploadState: "IN_PROGRESS" };
+    if (url.endsWith(":publish")) return { state: "PENDING_REVIEW" };
+    polls += 1; // the first fetchStatus is the check before the upload
+    return polls === 1 ? {} : { lastAsyncUploadState: polls === 2 ? "IN_PROGRESS" : "SUCCEEDED" };
+  });
+  assert.equal(code, 0);
+  assert.match(stdout, /submitted: PENDING_REVIEW/);
+  assert.equal(requests.filter((r) => r.url.endsWith(":fetchStatus")).length, 3);
+});
+
+test("the script fails when the store does not take the submission", async () => {
+  for (const answer of [{ state: "REJECTED" }, { state: "CANCELLED" }, {}]) {
+    const { code, stderr } = await runAgainst((url) => {
+      if (url.endsWith(":upload")) return { uploadState: "SUCCEEDED" };
+      if (url.endsWith(":publish")) return answer;
+      return {};
+    });
+    assert.equal(code, 1, JSON.stringify(answer));
+    assert.match(stderr, /publish ended as/);
+  }
 });

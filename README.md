@@ -100,7 +100,10 @@ Until the setup below is done, the workflow skips. The setup is one time:
    account, the publisher ID (Dashboard, **Publisher**, **Settings**) and
    the item ID.
 
-Then run the workflow by hand once from the Actions tab, to check it.
+From then on, each new release goes to the store by itself. To check the
+login at once, run the workflow by hand from the Actions tab: with the
+first version still in review, it logs in, reads the store's status, and
+says that it sends nothing.
 
 ## Development
 

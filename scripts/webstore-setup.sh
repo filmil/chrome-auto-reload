@@ -22,20 +22,32 @@ g services enable chromewebstore.googleapis.com iamcredentials.googleapis.com \
   sts.googleapis.com iam.googleapis.com
 number="$(g projects describe "$project" --format='value(projectNumber)')"
 
-g iam service-accounts describe "$sa" >/dev/null 2>&1 \
-  || g iam service-accounts create "$sa_name" --display-name="Chrome Web Store publisher"
+# Each step makes the thing if it is missing, and brings back one that was
+# deleted in the last 30 days, which gcloud still describes.
+state() { g "$@" --format='value(state)' 2>/dev/null || echo MISSING; }
 
-g iam workload-identity-pools describe "$pool" --location=global >/dev/null 2>&1 \
-  || g iam workload-identity-pools create "$pool" --location=global \
-       --display-name="GitHub Actions"
+if ! g iam service-accounts describe "$sa" >/dev/null 2>&1; then
+  g iam service-accounts create "$sa_name" --display-name="Chrome Web Store publisher"
+fi
 
-g iam workload-identity-pools providers describe "$provider" --location=global \
-    --workload-identity-pool="$pool" >/dev/null 2>&1 \
-  || g iam workload-identity-pools providers create-oidc "$provider" --location=global \
-       --workload-identity-pool="$pool" \
-       --issuer-uri="https://token.actions.githubusercontent.com" \
-       --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository" \
-       --attribute-condition="assertion.repository == '$repo'"
+case "$(state iam workload-identity-pools describe "$pool" --location=global)" in
+  MISSING) g iam workload-identity-pools create "$pool" --location=global \
+             --display-name="GitHub Actions" ;;
+  DELETED) g iam workload-identity-pools undelete "$pool" --location=global ;;
+esac
+
+provider_args=(--location=global --workload-identity-pool="$pool")
+case "$(state iam workload-identity-pools providers describe "$provider" "${provider_args[@]}")" in
+  MISSING) g iam workload-identity-pools providers create-oidc "$provider" "${provider_args[@]}" \
+             --issuer-uri="https://token.actions.githubusercontent.com" \
+             --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository" \
+             --attribute-condition="assertion.repository == '$repo'" ;;
+  DELETED) g iam workload-identity-pools providers undelete "$provider" "${provider_args[@]}" ;;
+esac
+# Only this repository may log in, also when the provider was made for
+# another one before.
+g iam workload-identity-pools providers update-oidc "$provider" "${provider_args[@]}" \
+  --attribute-condition="assertion.repository == '$repo'" >/dev/null
 
 g iam service-accounts add-iam-policy-binding "$sa" \
   --role=roles/iam.workloadIdentityUser \

@@ -22,13 +22,22 @@ export function compareVersions(a, b) {
   return 0;
 }
 
+// Chrome's rule for a version: 1 to 4 integers, each 0 to 65535, with no
+// leading zeros.
+export function isVersion(v) {
+  return typeof v === "string" && /^(0|[1-9]\d{0,4})(\.(0|[1-9]\d{0,4})){0,3}$/.test(v)
+    && v.split(".").every((p) => Number(p) <= 65535);
+}
+
 // The versions the store holds for the item: published, and submitted in
-// any state. A rejected version is not sent again; the next release is.
+// any state but cancelled. A rejected version is not sent again; the next
+// release is. A cancelled one can be sent again.
 function storeVersions(status) {
-  return [status.publishedItemRevisionStatus, status.submittedItemRevisionStatus]
+  const submitted = status.submittedItemRevisionStatus;
+  return [status.publishedItemRevisionStatus, submitted?.state === "CANCELLED" ? null : submitted]
     .flatMap((revision) => revision?.distributionChannels ?? [])
     .map((channel) => channel.crxVersion)
-    .filter(Boolean);
+    .filter(isVersion);
 }
 
 // Decides what to do with release `version`, from the store's fetchStatus
@@ -37,9 +46,14 @@ export function plan(status, version) {
   if (status.takenDown) {
     throw new Error("the store has taken the item down; see the Developer Dashboard");
   }
-  if (status.submittedItemRevisionStatus?.state === "PENDING_REVIEW") {
+  if (!isVersion(version)) throw new Error(`not a Chrome version: ${version}`);
+  // A version in review, or reviewed and waiting for someone to publish it
+  // in the Dashboard, is still on its way; a new one would replace it.
+  const waiting = { PENDING_REVIEW: "is still in review", STAGED: "is staged, waiting to be published in the Dashboard" };
+  const state = status.submittedItemRevisionStatus?.state;
+  if (waiting[state]) {
     const [v] = storeVersions({ submittedItemRevisionStatus: status.submittedItemRevisionStatus });
-    return { upload: false, reason: `version ${v ?? "?"} is still in review` };
+    return { upload: false, reason: `version ${v ?? "?"} ${waiting[state]}` };
   }
   const newest = storeVersions(status).sort(compareVersions).at(-1);
   if (newest && compareVersions(version, newest) <= 0) {
@@ -78,21 +92,25 @@ async function main([version, zip]) {
   }
 
   console.log(`uploading ${zip} (version ${version})`);
-  let upload = await call("POST", `${API}/upload/v2/${item}:upload`, readFileSync(zip),
+  let answer = await call("POST", `${API}/upload/v2/${item}:upload`, readFileSync(zip),
     { "Content-Type": "application/zip" });
-  let state = upload.uploadState;
-  // A large package is processed after the request returns.
+  let state = answer.uploadState;
+  // A large package is processed after the request returns. CWS_POLL_MS
+  // is for tests.
+  const pollMs = Number(process.env.CWS_POLL_MS ?? 10_000);
   for (let i = 0; state === "IN_PROGRESS" && i < 30; i++) {
-    await new Promise((r) => setTimeout(r, 10_000));
-    state = (await fetchStatus()).lastAsyncUploadState;
+    await new Promise((r) => setTimeout(r, pollMs));
+    answer = await fetchStatus();
+    state = answer.lastAsyncUploadState;
   }
-  if (state !== "SUCCEEDED") throw new Error(`upload ended as ${state}: ${JSON.stringify(upload)}`);
+  if (state !== "SUCCEEDED") throw new Error(`upload ended as ${state}: ${JSON.stringify(answer)}`);
 
   const published = await call("POST", `${API}/v2/${item}:publish`,
     JSON.stringify({ publishType: "DEFAULT_PUBLISH" }), { "Content-Type": "application/json" });
   for (const w of published.warningInfo?.warnings ?? []) console.log(`warning: ${JSON.stringify(w)}`);
-  if (["REJECTED", "CANCELLED", "ITEM_STATE_UNSPECIFIED"].includes(published.state)) {
-    throw new Error(`publish ended as ${published.state}`);
+  const accepted = ["PENDING_REVIEW", "STAGED", "PUBLISHED", "PUBLISHED_TO_TESTERS"];
+  if (!accepted.includes(published.state)) {
+    throw new Error(`publish ended as ${published.state}: ${JSON.stringify(published)}`);
   }
   console.log(`version ${version} submitted: ${published.state}`);
 }
