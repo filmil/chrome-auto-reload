@@ -64,6 +64,13 @@ test("the badge changes when the rounded number does", () => {
   assert.equal(msUntilBadgeChange(5 * min), min);
   assert.equal(msUntilBadgeChange(999 * min + 1), 1); // "17h" becomes "999"
   assert.equal(msUntilBadgeChange(20 * 60 * min), 60 * min); // "20h" becomes "19h"
+  // From 16 h 39 min to 17 h, the next change is to "999", not to "16h".
+  assert.equal(badgeText(1020 * min), "17h");
+  assert.equal(msUntilBadgeChange(1020 * min), 21 * min);
+  assert.equal(msUntilBadgeChange(1021 * min), min); // "18h" becomes "17h"
+  assert.equal(badgeText(1021 * min), "18h");
+  assert.equal(badgeText(960 * min), "960");
+  assert.equal(msUntilBadgeChange(960 * min), min);
   // After each change, the text is the one for the time then left.
   for (const left of [61 * 1000, 90 * 1000, 5 * min, 1000 * min, 7 * 24 * 60 * min]) {
     const change = msUntilBadgeChange(left);
