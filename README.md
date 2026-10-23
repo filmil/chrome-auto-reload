@@ -78,6 +78,8 @@ version again; the next release goes instead. It logs in to Google
 without a stored key: GitHub Actions proves which repository it runs for,
 and Google lets only this repository act as the store's service account.
 
+The store listing, its text and images, is in [`store/`](store/listing.md).
+
 Until the setup below is done, the workflow skips. The setup is one time:
 
 1. **Register** as a Chrome Web Store developer, with 2-step verification
@@ -110,6 +112,14 @@ From then on, each new release goes to the store by itself. To check the
 login at once, run the workflow by hand from the Actions tab: with the
 first version still in review, it logs in, reads the store's status, and
 says that it sends nothing.
+
+## Privacy
+
+The extension collects no data, and sends nothing anywhere. It makes no
+network requests. It cannot read the pages it reloads: it knows a tab
+only by its number. It stores two things, in your browser only: each
+tab's reload interval, for the browser session, and the last interval
+you chose, as the default for the next tab.
 
 ## Development
 
