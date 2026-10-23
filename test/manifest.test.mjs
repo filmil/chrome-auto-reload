@@ -28,3 +28,13 @@ test("no code reaches the network or evaluates strings", () => {
     }
   }
 });
+
+test("the name says whose extension it is", () => {
+  const name = "filmil's Auto Reload";
+  assert.equal(manifest.name, name);
+  assert.equal(manifest.action.default_title, name);
+  const popup = readFileSync(new URL("popup.html", dir), "utf8");
+  assert.match(popup, new RegExp(`<title>${name}</title>`));
+  assert.match(popup, new RegExp(`<h1>${name}</h1>`));
+  assert.ok(manifest.description.length <= 132, "Chrome allows 132 characters");
+});
