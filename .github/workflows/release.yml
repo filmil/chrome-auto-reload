@@ -79,6 +79,7 @@ jobs:
         run: |
           npm ci
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          rm -rf "$RUNNER_TEMP/unzipped"
           unzip -q "dist/auto-reload-$VERSION.zip" -d "$RUNNER_TEMP/unzipped"
           E2E_EXTENSION_DIR="$RUNNER_TEMP/unzipped" npm run test:e2e
       - name: Publish

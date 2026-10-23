@@ -7,14 +7,29 @@ load("@rules_pkg//pkg:providers.bzl", "PackageVariablesInfo")
 _NODE = "@rules_nodejs//nodejs:toolchain_type"
 _NODE_RUNTIME = "@rules_nodejs//nodejs:runtime_toolchain_type"
 
-def check_version(version):
-    """Fails unless `version` is 1 to 4 dot-separated integers, each 0 to 65535 (Chrome's rule)."""
+def version_error(version):
+    """Why Chrome would refuse `version`, or None if it would take it.
+
+    Chrome takes 1 to 4 dot-separated integers, each 0 to 65535, with no
+    leading zeros.
+    """
     parts = version.split(".")
-    ok = len(parts) <= 4
+    if len(parts) > 4:
+        return "more than 4 parts"
     for p in parts:
-        ok = ok and p.isdigit() and int(p) <= 65535
-    if not ok:
-        fail("bad extension version %r: Chrome needs 1 to 4 integers, each 0 to 65535" % version)
+        if not p.isdigit():
+            return "%r is not a number" % p
+        if len(p) > 1 and p.startswith("0"):
+            return "%r has a leading zero" % p
+        if int(p) > 65535:
+            return "%r is over 65535" % p
+    return None
+
+def check_version(version):
+    """Fails unless Chrome would take `version`."""
+    error = version_error(version)
+    if error:
+        fail("bad extension version %r: %s" % (version, error))
 
 def _version(ctx):
     version = ctx.attr._version[BuildSettingInfo].value

@@ -17,7 +17,10 @@ jobs:
       - name: Unit and manifest tests
         run: bazel test //...
       - name: Package
-        run: bazel build //:zip --//:version=0.0.0
+        run: |
+          bazel build //:zip
+          rm -rf "$RUNNER_TEMP/unzipped"
+          unzip -q bazel-bin/auto-reload-0.1.0.zip -d "$RUNNER_TEMP/unzipped"
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -27,8 +30,9 @@ jobs:
       # Lift that on this throwaway VM, so the test runs Chrome sandboxed.
       - name: Allow Chrome's sandbox
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-      - name: End-to-end test in Chrome
-        run: npm run test:e2e
+      # On the zip Bazel built, so the test sees what a release would ship.
+      - name: End-to-end test of the zip in Chrome
+        run: E2E_EXTENSION_DIR="$RUNNER_TEMP/unzipped" npm run test:e2e
       - name: Icons match their generator
         run: |
           python3 scripts/make_icons.py "$RUNNER_TEMP/icons"

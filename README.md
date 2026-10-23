@@ -78,7 +78,8 @@ bazel build //:zip --//:version=1.2.3     # bazel-bin/auto-reload-1.2.3.zip
 ```
 
 The same source and version build the same zip, byte for byte. The
-version is 1 to 4 integers, each 0 to 65535, as Chrome requires.
+version is 1 to 4 integers, each 0 to 65535 with no leading zeros, as
+Chrome requires. Left out, it is the source manifest's version.
 
 The end-to-end test needs Node and npm, since Puppeteer downloads its own
 Chrome:
