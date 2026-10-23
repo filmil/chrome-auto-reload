@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Auto Reload",
+  "name": "filmil's Auto Reload",
   "version": "0.1.0",
-  "description": "Reloads a tab every N seconds, minutes or hours. No access to page content, no network.",
+  "description": "Reloads a tab every N seconds, minutes or hours. No ads, no tracking, no access to page content, no network.",
   "minimum_chrome_version": "120",
   "permissions": ["alarms", "storage"],
   "background": {
@@ -10,7 +10,7 @@
     "type": "module"
   },
   "action": {
-    "default_title": "Auto Reload",
+    "default_title": "filmil's Auto Reload",
     "default_popup": "popup.html",
     "default_icon": {
       "16": "icons/icon16.png",

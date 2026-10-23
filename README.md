@@ -1,10 +1,13 @@
 [![test](https://github.com/filmil/chrome-auto-reload/actions/workflows/test.yml/badge.svg)](https://github.com/filmil/chrome-auto-reload/actions/workflows/test.yml)
 [![release](https://github.com/filmil/chrome-auto-reload/actions/workflows/release.yml/badge.svg)](https://github.com/filmil/chrome-auto-reload/actions/workflows/release.yml)
 
-# Auto Reload
+# filmil's Auto Reload
 
 A Chrome extension that reloads a tab every so many seconds, minutes or
-hours, and can do nothing else.
+hours, and can do nothing else. It shows no ads, tracks nothing, and has
+no access to the pages it reloads. The name says who made it: it is
+filmil's, from this repository, and not one of the many extensions with
+the same purpose and a generic name.
 
 Auto-reload extensions are a common place for trouble: many ask to "read
 and change all your data on all websites", and some have been sold and
