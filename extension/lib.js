@@ -23,6 +23,32 @@ export function toSeconds(value, unit) {
   return { seconds };
 }
 
+// Each reload can run up to this many seconds after its interval ends, by a
+// random amount, so that tabs started together do not all reload at once.
+export const MAX_JITTER_SECONDS = 5;
+
+// Returns { seconds } for a valid jitter, or { error } with a message for
+// the user. The jitter is a whole number of seconds; empty means 0.
+export function toJitter(value) {
+  const text = String(value ?? "").trim();
+  if (text === "") return { seconds: 0 };
+  const seconds = /^\d+$/.test(text) ? Number(text) : NaN;
+  if (!(seconds <= MAX_JITTER_SECONDS)) {
+    return { error: `Enter the jitter in whole seconds, from 0 to ${MAX_JITTER_SECONDS}.` };
+  }
+  return { seconds };
+}
+
+// The next reload, counted from `now` (in milliseconds): `due` is when the
+// interval ends, and `at` is when the reload runs, a random 0 to
+// jitterSeconds later. `random` returns a number in [0, 1), as Math.random
+// does.
+export function nextReload(now, seconds, jitterSeconds = 0, random = Math.random) {
+  const due = now + seconds * 1000;
+  const jitterMs = Math.floor(random() * (jitterSeconds * 1000 + 1));
+  return { due, at: due + jitterMs };
+}
+
 // "45 s", "5 min", "1 h 30 min", "2 h".
 export function formatDuration(totalSeconds) {
   const s = Math.max(0, Math.round(totalSeconds));

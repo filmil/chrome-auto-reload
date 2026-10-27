@@ -2,8 +2,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-  MIN_SECONDS, alarmName, badgeAlarmName, badgeText, formatDuration,
-  msUntilBadgeChange, tabIdFromAlarm, tabIdFromBadgeAlarm, toSeconds,
+  MAX_JITTER_SECONDS, MIN_SECONDS, alarmName, badgeAlarmName, badgeText,
+  formatDuration, msUntilBadgeChange, nextReload, tabIdFromAlarm,
+  tabIdFromBadgeAlarm, toJitter, toSeconds,
 } from "../extension/lib.js";
 
 test("toSeconds converts each unit", () => {
@@ -83,4 +84,31 @@ test("badge alarms are told apart from reload alarms", () => {
   assert.equal(tabIdFromBadgeAlarm(badgeAlarmName(7)), 7);
   assert.equal(tabIdFromAlarm(badgeAlarmName(7)), null);
   assert.equal(tabIdFromBadgeAlarm(alarmName(7)), null);
+});
+
+test("toJitter takes whole seconds from 0 to 5", () => {
+  assert.equal(MAX_JITTER_SECONDS, 5);
+  for (let n = 0; n <= 5; n++) assert.deepEqual(toJitter(String(n)), { seconds: n });
+  assert.deepEqual(toJitter(" 3 "), { seconds: 3 });
+  assert.deepEqual(toJitter(""), { seconds: 0 });
+  assert.deepEqual(toJitter(undefined), { seconds: 0 });
+  for (const bad of ["6", "-1", "1.5", "abc", "1e1", "0x3", "+2", "99999999999999999999"]) {
+    assert.match(toJitter(bad).error ?? "", /whole seconds, from 0 to 5/,
+      `accepted ${JSON.stringify(bad)}`);
+  }
+});
+
+test("nextReload adds 0 to the whole jitter to the interval", () => {
+  const now = 1_000_000;
+  assert.deepEqual(nextReload(now, 60, 0, () => 0.999), { due: now + 60_000, at: now + 60_000 });
+  assert.deepEqual(nextReload(now, 60), { due: now + 60_000, at: now + 60_000 });
+  assert.deepEqual(nextReload(now, 60, 5, () => 0), { due: now + 60_000, at: now + 60_000 });
+  // The largest value random() can return gives the full 5 seconds.
+  const top = nextReload(now, 60, 5, () => 1 - Number.EPSILON);
+  assert.equal(top.at - top.due, 5_000);
+  for (let i = 0; i < 1000; i++) {
+    const { due, at } = nextReload(now, 30, 5);
+    assert.equal(due, now + 30_000);
+    assert.ok(at >= due && at <= due + 5_000, `jitter ${at - due} ms`);
+  }
 });

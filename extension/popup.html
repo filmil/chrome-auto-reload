@@ -18,6 +18,11 @@
         <option value="h">hours</option>
       </select>
     </div>
+    <label for="jitter">Plus a random delay of up to</label>
+    <div class="row">
+      <input id="jitter" type="text" inputmode="numeric" value="0" autocomplete="off">
+      <span class="unit">seconds (0 to 5)</span>
+    </div>
     <label class="check"><input id="bypass" type="checkbox"> Bypass the cache</label>
     <div class="row">
       <button id="start" type="submit">Start</button>

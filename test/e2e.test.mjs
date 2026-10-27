@@ -142,6 +142,52 @@ async function checkReloads(tabId, before) {
   assert.equal(await badgeBecomes(tabId, "1"), "1");
 }
 
+// The reload alarm fires once and is set again after each reload, so this
+// waits for two reloads, not one.
+test("with jitter, reloads again and again, each up to the jitter late",
+  { timeout: 180_000 }, async () => {
+    const tabId = await pageTabId();
+    const before = loads;
+    await worker.evaluate((id) => globalThis.autoReload.start(id, 30, false, 5), tabId);
+    try {
+      const first = await worker.evaluate((id) => globalThis.autoReload.status(id), tabId);
+      assert.equal(first.active, true);
+      assert.equal(first.jitter, 5);
+      const late = first.nextAt - first.due;
+      assert.ok(late >= 0 && late <= 5_000, `jitter of ${late} ms`);
+      const wait = first.due - Date.now();
+      assert.ok(wait > 20_000 && wait <= 31_000, `interval ends in ${wait} ms`);
+
+      // Chrome may run an alarm a little late; allow for it.
+      const deadline = Date.now() + 150_000;
+      while (loads < before + 2 && Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 500));
+      }
+      assert.ok(loads >= before + 2, `${loads - before} reloads, wanted 2`);
+      const next = await worker.evaluate((id) => globalThis.autoReload.status(id), tabId);
+      assert.equal(next.active, true);
+      assert.ok(next.due > first.due, "the next interval was not set");
+      assert.ok(next.nextAt - next.due >= 0 && next.nextAt - next.due <= 5_000);
+      // The badge counts down to the end of the interval, not the jitter.
+      assert.equal(await badgeBecomes(tabId, "1"), "1");
+    } finally {
+      await worker.evaluate((id) => globalThis.autoReload.stop(id), tabId);
+    }
+    assert.equal(await worker.evaluate(() => chrome.alarms.getAll().then((a) => a.length)), 0);
+  });
+
+test("the popup refuses a jitter over 5 seconds", async () => {
+  const id = new URL(worker.url()).host;
+  const popup = await browser.newPage();
+  await popup.goto(`chrome-extension://${id}/popup.html`);
+  await popup.$eval("#jitter", (el) => { el.value = "6"; });
+  await popup.click("#start");
+  await popup.waitForFunction(() => document.getElementById("error").textContent !== "");
+  assert.match(await popup.$eval("#error", (el) => el.textContent), /from 0 to 5/);
+  assert.equal(await worker.evaluate(() => chrome.alarms.getAll().then((a) => a.length)), 0);
+  await popup.close();
+});
+
 test("the popup refuses an interval under 30 seconds", async () => {
   const id = new URL(worker.url()).host;
   const popup = await browser.newPage();

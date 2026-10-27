@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-import { formatDuration, toSeconds } from "./lib.js";
+import { formatDuration, toJitter, toSeconds } from "./lib.js";
 
 const $ = (id) => document.getElementById(id);
 let tabId = null;
@@ -25,6 +25,7 @@ async function refresh() {
     const left = Math.max(0, (state.nextAt - Date.now()) / 1000);
     $("status").textContent =
       `Reloading every ${formatDuration(state.seconds)}` +
+      `${state.jitter ? `, plus up to ${state.jitter} s at random` : ""}` +
       `${state.bypassCache ? ", bypassing the cache" : ""}. Next in ${formatDuration(left)}.`;
   };
   show();
@@ -39,16 +40,20 @@ $("form").addEventListener("submit", async (event) => {
   event.preventDefault();
   $("error").textContent = "";
   const { seconds, error } = toSeconds($("value").value, $("unit").value);
-  if (error) {
-    $("error").textContent = error;
+  const jitter = toJitter($("jitter").value);
+  if (error || jitter.error) {
+    $("error").textContent = error ?? jitter.error;
     return;
   }
   const bypassCache = $("bypass").checked;
   try {
-    await send({ type: "start", tabId, seconds, bypassCache });
+    await send({ type: "start", tabId, seconds, bypassCache, jitter: jitter.seconds });
     // Remembered as the default for the next tab.
     await chrome.storage.local.set({
-      last: { value: $("value").value, unit: $("unit").value, bypassCache },
+      last: {
+        value: $("value").value, unit: $("unit").value, bypassCache,
+        jitter: String(jitter.seconds),
+      },
     });
     await refresh();
   } catch (e) {
@@ -75,6 +80,7 @@ async function init() {
     $("value").value = last.value;
     $("unit").value = last.unit;
     $("bypass").checked = Boolean(last.bypassCache);
+    $("jitter").value = last.jitter ?? "0";
   }
   const state = await send({ type: "status", tabId });
   if (state.active) {
@@ -84,6 +90,7 @@ async function init() {
     $("unit").value = inHours ? "h" : inMinutes ? "min" : "s";
     $("value").value = String(state.seconds / (inHours ? 3600 : inMinutes ? 60 : 1));
     $("bypass").checked = state.bypassCache;
+    $("jitter").value = String(state.jitter);
   }
   await refresh();
 }
