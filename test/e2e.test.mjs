@@ -190,6 +190,26 @@ test("a stop during the setting of the next reload ends the reloads", async () =
   assert.deepEqual(await worker.evaluate(() => chrome.storage.session.get(null)), {});
 });
 
+// The same, with the stop a few browser calls behind the setting of the
+// next reload, to cover each order in which their steps can run.
+test("a stop any few steps into the setting of the next reload ends the reloads",
+  { timeout: 60_000 }, async () => {
+    const tabId = await pageTabId();
+    for (let hops = 0; hops <= 8; hops++) {
+      await worker.evaluate((id) => globalThis.autoReload.start(id, 60, false, 5), tabId);
+      await worker.evaluate(async (id, n) => {
+        const scheduled = globalThis.autoReload.schedule(id);
+        for (let i = 0; i < n; i++) await chrome.storage.session.get(null);
+        await globalThis.autoReload.stop(id);
+        await scheduled;
+      }, tabId, hops);
+      const alarms = await worker.evaluate(() => chrome.alarms.getAll().then((a) => a.length));
+      assert.equal(alarms, 0, `${alarms} alarms left with the stop ${hops} calls behind`);
+      assert.deepEqual(await worker.evaluate(() => chrome.storage.session.get(null)), {},
+        `state left with the stop ${hops} calls behind`);
+    }
+  });
+
 test("the popup refuses a jitter over 5 seconds", async () => {
   const id = new URL(worker.url()).host;
   const popup = await browser.newPage();
