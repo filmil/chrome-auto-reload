@@ -64,11 +64,14 @@ async function start(tabId, seconds, bypassCache, jitter = 0) {
   await showBadge(tabId);
 }
 
+// Removes the settings first, then the alarms. A schedule() that runs at
+// the same time then either sees the settings gone, after it set its alarm,
+// and stops the tab again, or set its alarm before this clears it.
 async function stop(tabId) {
   const name = alarmName(tabId);
+  await chrome.storage.session.remove([name, dueKey(tabId)]);
   await chrome.alarms.clear(name);
   await chrome.alarms.clear(badgeAlarmName(tabId));
-  await chrome.storage.session.remove([name, dueKey(tabId)]);
   // The tab may be gone already.
   await chrome.action.setBadgeText({ tabId, text: "" }).catch(() => {});
 }
