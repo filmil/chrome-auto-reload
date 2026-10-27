@@ -10,21 +10,31 @@ import {
 } from "./lib.js";
 
 // Settings per tab, in session storage: they end with the browser session,
-// as tab IDs do. A tab's settings are { seconds, bypassCache, jitter, due }:
-// `due` is when the current interval ends, without the jitter.
+// as tab IDs do. A tab's settings are { seconds, bypassCache, jitter }, and
+// only start() writes them. Beside them, under their own key, is when the
+// current interval ends, without the jitter.
 async function getConfig(tabId) {
   const key = alarmName(tabId);
   return (await chrome.storage.session.get(key))[key] ?? null;
 }
+function dueKey(tabId) {
+  return `due:${tabId}`;
+}
+async function getDue(tabId) {
+  const key = dueKey(tabId);
+  return (await chrome.storage.session.get(key))[key] ?? null;
+}
 
 // Sets the reload alarm for the end of the next interval, plus the jitter.
-// Does nothing if the tab was stopped meanwhile.
+// A stop that runs while this one waits removes the tab's settings; then
+// this takes back the alarm and the end time it set.
 async function schedule(tabId) {
   const config = await getConfig(tabId);
   if (!config) return;
   const { due, at } = nextReload(Date.now(), config.seconds, config.jitter);
-  await chrome.storage.session.set({ [alarmName(tabId)]: { ...config, due } });
+  await chrome.storage.session.set({ [dueKey(tabId)]: due });
   await chrome.alarms.create(alarmName(tabId), { when: at });
+  if (!(await getConfig(tabId))) await stop(tabId);
 }
 
 // Shows the minutes until the next reload on the tab's badge, and sets an
@@ -38,7 +48,7 @@ async function showBadge(tabId) {
   const config = await getConfig(tabId);
   const alarm = config && (await chrome.alarms.get(alarmName(tabId)));
   if (!alarm) return;
-  const left = (config.due ?? alarm.scheduledTime) - Date.now();
+  const left = ((await getDue(tabId)) ?? alarm.scheduledTime) - Date.now();
   await chrome.action.setBadgeBackgroundColor({ tabId, color: "#1a73e8" });
   await chrome.action.setBadgeText({ tabId, text: badgeText(left) });
   const change = msUntilBadgeChange(left);
@@ -54,11 +64,14 @@ async function start(tabId, seconds, bypassCache, jitter = 0) {
   await showBadge(tabId);
 }
 
+// Removes the settings first, then the alarms. A schedule() that runs at
+// the same time then either sees the settings gone, after it set its alarm,
+// and stops the tab again, or set its alarm before this clears it.
 async function stop(tabId) {
   const name = alarmName(tabId);
+  await chrome.storage.session.remove([name, dueKey(tabId)]);
   await chrome.alarms.clear(name);
   await chrome.alarms.clear(badgeAlarmName(tabId));
-  await chrome.storage.session.remove(name);
   // The tab may be gone already.
   await chrome.action.setBadgeText({ tabId, text: "" }).catch(() => {});
 }
@@ -67,7 +80,8 @@ async function status(tabId) {
   const config = await getConfig(tabId);
   const alarm = await chrome.alarms.get(alarmName(tabId));
   if (!config || !alarm) return { active: false };
-  return { active: true, jitter: 0, ...config, nextAt: alarm.scheduledTime };
+  const due = (await getDue(tabId)) ?? alarm.scheduledTime;
+  return { active: true, jitter: 0, ...config, due, nextAt: alarm.scheduledTime };
 }
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
@@ -136,4 +150,4 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
 });
 
 // For the end-to-end test, which drives the worker directly.
-globalThis.autoReload = { start, stop, status };
+globalThis.autoReload = { start, stop, status, schedule };

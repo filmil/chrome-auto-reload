@@ -47,11 +47,12 @@ show the next number up to 30 seconds late. The popup counts down to the
 next reload in seconds. **Stop** ends it; closing the tab
 does too. **Bypass the cache** reloads as Shift+Reload does.
 
-**Plus a random delay of up to** adds 0 to 5 whole seconds of jitter: each
-reload then runs a new random amount, up to that many seconds, after its
-interval ends. Tabs that were started together then do not all reload at
-the same moment. The badge counts down to the end of the interval and
-leaves the jitter out; the popup counts down to the reload itself.
+**Plus a random delay of up to** sets a jitter of 0 to 5 whole seconds:
+each reload then runs a new random time after its interval ends, anywhere
+from 0 up to that many seconds. Tabs that were started together then do
+not all reload at the same moment. The badge counts down to the end of
+the interval and leaves the jitter out; the popup counts down to the
+reload itself.
 
 ## Install
 

@@ -176,6 +176,40 @@ test("with jitter, reloads again and again, each up to the jitter late",
     assert.equal(await worker.evaluate(() => chrome.alarms.getAll().then((a) => a.length)), 0);
   });
 
+// The reload alarm's handler sets the next reload while the user may press
+// Stop. The stop must win: no alarm and no stored state are left.
+test("a stop during the setting of the next reload ends the reloads", async () => {
+  const tabId = await pageTabId();
+  await worker.evaluate((id) => globalThis.autoReload.start(id, 60, false, 5), tabId);
+  await worker.evaluate((id) => Promise.all([
+    globalThis.autoReload.schedule(id), globalThis.autoReload.stop(id),
+  ]), tabId);
+  const state = await worker.evaluate((id) => globalThis.autoReload.status(id), tabId);
+  assert.equal(state.active, false);
+  assert.equal(await worker.evaluate(() => chrome.alarms.getAll().then((a) => a.length)), 0);
+  assert.deepEqual(await worker.evaluate(() => chrome.storage.session.get(null)), {});
+});
+
+// The same, with the stop a few browser calls behind the setting of the
+// next reload, to cover each order in which their steps can run.
+test("a stop any few steps into the setting of the next reload ends the reloads",
+  { timeout: 60_000 }, async () => {
+    const tabId = await pageTabId();
+    for (let hops = 0; hops <= 8; hops++) {
+      await worker.evaluate((id) => globalThis.autoReload.start(id, 60, false, 5), tabId);
+      await worker.evaluate(async (id, n) => {
+        const scheduled = globalThis.autoReload.schedule(id);
+        for (let i = 0; i < n; i++) await chrome.storage.session.get(null);
+        await globalThis.autoReload.stop(id);
+        await scheduled;
+      }, tabId, hops);
+      const alarms = await worker.evaluate(() => chrome.alarms.getAll().then((a) => a.length));
+      assert.equal(alarms, 0, `${alarms} alarms left with the stop ${hops} calls behind`);
+      assert.deepEqual(await worker.evaluate(() => chrome.storage.session.get(null)), {},
+        `state left with the stop ${hops} calls behind`);
+    }
+  });
+
 test("the popup refuses a jitter over 5 seconds", async () => {
   const id = new URL(worker.url()).host;
   const popup = await browser.newPage();
