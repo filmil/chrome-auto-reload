@@ -47,6 +47,12 @@ show the next number up to 30 seconds late. The popup counts down to the
 next reload in seconds. **Stop** ends it; closing the tab
 does too. **Bypass the cache** reloads as Shift+Reload does.
 
+**Plus a random delay of up to** adds 0 to 5 whole seconds of jitter: each
+reload then runs a new random amount, up to that many seconds, after its
+interval ends. Tabs that were started together then do not all reload at
+the same moment. The badge counts down to the end of the interval and
+leaves the jitter out; the popup counts down to the reload itself.
+
 ## Install
 
 From a [release](https://github.com/filmil/chrome-auto-reload/releases):
