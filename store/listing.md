@@ -37,7 +37,7 @@ Graphic assets:
 - Marquee promo tile: leave empty (optional)
 
 Additional fields:
-- Homepage URL: https://github.com/filmil/chrome-auto-reload
+- Homepage URL: https://www.hdlfactory.com/post/2026/10/30/filmils-auto-reload/
 - Support URL: https://github.com/filmil/chrome-auto-reload/issues
 - Mature content: No
 
